@@ -5,7 +5,7 @@
 | v1 | [`v1/`](v1) | Mockups de alta fidelidad P01–P10 y mapa de navegación, entregados en la semana 4. |
 | v2 | [`v2/`](v2) | Pantallas reales del Sprint 1, capturadas en https://turnojusto.xkcx.cl con los datos de la semilla QA (20-11-2026). |
 
-Las pantallas v2 conservan el código de v1 cuando corresponden a la misma pantalla (P01–P05). Las que no tenían mockup en v1 usan el prefijo `N`. P06 a P10 (turnos, calendario, reemplazos, reportes y vista móvil) siguen en v1 porque se construyen en los Sprints 2 y 3.
+Las pantallas v2 conservan el código de v1 cuando corresponden a la misma pantalla (P01–P05). Las que no tenían mockup en v1 usan el prefijo `N`. **P08 Reemplazos** se rediseñó como mockup (todavía no se programa) para aplicar la retroalimentación de la semana 4. P06, P07, P09 y P10 siguen en v1 porque se construyen en los Sprints 2 y 3.
 
 ## Cambios de v1 a v2
 
@@ -25,6 +25,8 @@ Las pantallas v2 conservan el código de v1 cuando corresponden a la misma panta
 | P03 Formulario de sucursal | Panel lateral con validación en línea. | Se mantiene el patrón de panel lateral. Se agregan el texto de ayuda «Único en la empresa» para el código, la región como lista desde Oracle (`ORG.REGION`) y un aviso de que los feriados regionales se aplican en el Sprint 2. | Retroalimentación: dejar claras las reglas de negocio en el mismo formulario. |
 | P04 Búsqueda de empleados | Importar CSV, selección múltiple y columna «Turnos 2026». | Búsqueda por nombre, RUT o correo con filtros de sucursal, equipo y estado mostrados como chips, más un botón «Limpiar filtros». Columna «Ingreso a rotación». Menú de acciones por fila. | Se quitan funciones que dependen de turnos o de cargas masivas (fuera del Sprint 1). |
 | P05 Detalle de empleado | Seis pestañas (disponibilidad, turnos, reemplazos, traslados, historial). | Dos pestañas: Resumen y Traslados. Etiqueta «Sin cuenta aún» mientras la persona no haya ingresado con Entra. Tarjetas de días en rotación, traslados y rol. Aviso de cómo se calculará la cuota de equidad (e = T × c / Σc). | La ficha muestra lo que el Sprint 1 ya guarda. Las demás pestañas llegan con los turnos. |
+
+| P08 Reemplazos (Coordinador) | «Aprobar» confirmaba la cobertura en un solo paso. | Cada solicitud entre sucursales muestra las **dos decisiones** (salida autorizada por la sucursal de origen e incorporación aceptada por la del turno), con quién decidió y cuándo. El botón cambia según el caso: «Autorizar salida» advierte que no confirma la cobertura y «Aprobar y confirmar» aparece cuando la otra sucursal ya aprobó. Hay pestañas «Por decidir» y «Esperando a otra sucursal», y un estado «Aprobación parcial». El panel lateral explica qué pasa si alguien rechaza o si el turno vence. La vista del trabajador muestra «1 de 2 aprobaciones». Un reemplazo interno sigue con una sola aprobación. | **Retroalimentación de la semana 4:** el flujo visual debía reflejar la doble aprobación de los reemplazos entre sucursales. |
 
 ### Pantallas nuevas
 
