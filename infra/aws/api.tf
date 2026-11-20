@@ -4,7 +4,7 @@ resource "aws_apigatewayv2_api" "principal" {
   protocol_type = "HTTP"
   description   = "Puerta de entrada de TurnoJusto: valida el JWT de Entra y enruta a cada microservicio"
   cors_configuration {
-    allow_origins = ["https://${aws_cloudfront_distribution.web.domain_name}", var.url_web_publica, "http://localhost:5173"]
+    allow_origins = [var.url_web_publica, "http://localhost:5173"]
     allow_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     allow_headers = ["authorization", "content-type"]
     max_age       = 3600
@@ -13,7 +13,7 @@ resource "aws_apigatewayv2_api" "principal" {
 
 resource "aws_apigatewayv2_authorizer" "entra" {
   api_id           = aws_apigatewayv2_api.principal.id
-  name             = "entra-external-id"
+  name             = "entra-id"
   authorizer_type  = "JWT"
   identity_sources = ["$request.header.Authorization"]
   jwt_configuration {
@@ -33,7 +33,7 @@ resource "aws_apigatewayv2_integration" "servicio" {
   api_id             = aws_apigatewayv2_api.principal.id
   integration_type   = "HTTP_PROXY"
   integration_method = "ANY"
-  integration_uri    = aws_service_discovery_service.servicio[each.key].arn
+  integration_uri    = aws_lb_listener.servicio[each.key].arn
   connection_type    = "VPC_LINK"
   connection_id      = aws_apigatewayv2_vpc_link.principal.id
 }
@@ -72,7 +72,7 @@ resource "aws_apigatewayv2_integration" "publica" {
   api_id             = aws_apigatewayv2_api.principal.id
   integration_type   = "HTTP_PROXY"
   integration_method = "GET"
-  integration_uri    = aws_service_discovery_service.servicio[each.value.servicio].arn
+  integration_uri    = aws_lb_listener.servicio[each.value.servicio].arn
   connection_type    = "VPC_LINK"
   connection_id      = aws_apigatewayv2_vpc_link.principal.id
   request_parameters = { "overwrite:path" = each.value.ruta }

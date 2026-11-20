@@ -72,3 +72,9 @@ variable "url_web_publica" {
   type        = string
   default     = "https://turnojusto.xkcx.cl"
 }
+
+variable "zonas_permitidas" {
+  description = "Zonas (AZ ID) donde se ubican el VPC Link, el ALB y las tareas; use1-az3 no soporta VPC Link"
+  type        = list(string)
+  default     = ["use1-az1", "use1-az2", "use1-az4", "use1-az6"]
+}

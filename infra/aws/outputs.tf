@@ -1,6 +1,6 @@
 output "url_web" {
-  description = "URL pública de la aplicación (CloudFront)"
-  value       = "https://${aws_cloudfront_distribution.web.domain_name}"
+  description = "URL pública de la aplicación"
+  value       = var.url_web_publica
 }
 
 output "url_api" {
@@ -8,12 +8,9 @@ output "url_api" {
   value       = aws_apigatewayv2_api.principal.api_endpoint
 }
 
-output "bucket_web" {
-  value = aws_s3_bucket.web.bucket
-}
-
-output "cloudfront_id" {
-  value = aws_cloudfront_distribution.web.id
+output "alb_interno" {
+  description = "DNS del balanceador interno (solo accesible dentro de la VPC)"
+  value       = aws_lb.interno.dns_name
 }
 
 output "ecr" {

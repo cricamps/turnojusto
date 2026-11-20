@@ -1,5 +1,5 @@
 # Despliegue continuo a AWS (ambiente QA): cada push a main reconstruye las imágenes,
-# actualiza la infraestructura con Terraform y publica la SPA. Así el avance queda
+# actualiza la infraestructura con Terraform y publica la SPA en la rama web (cPanel). Así el avance queda
 # visible en línea apenas se integra un cambio.
 name: Despliegue QA
 
@@ -89,6 +89,19 @@ jobs:
             echo "TF_VAR_imagen_tag=${GITHUB_SHA::12}"
           } >> "$GITHUB_ENV"
 
+      - name: Limpiar recursos bloqueados por el Learner Lab
+        if: steps.cred.outputs.ok == 'true'
+        working-directory: infra/aws
+        run: |
+          # La primera versión intentó crear S3+CloudFront y Cloud Map, que la política (SCP) del
+          # Learner Lab deniega. Se quitan del estado para que el refresh no vuelva a fallar.
+          for r in $(terraform state list | grep -E '^(aws_s3_bucket|aws_s3_bucket_[a-z_]+|aws_cloudfront_[a-z_]+|aws_service_discovery_[a-z_]+|data\.aws_iam_policy_document)\.(web|interno|servicio)' || true); do
+            echo "Quitando del estado: $r"
+            terraform state rm "$r" || true
+          done
+          CUENTA=$(aws sts get-caller-identity --query Account --output text)
+          aws s3 rb "s3://turnojusto-${{ vars.AMBIENTE || 'qa' }}-web-${CUENTA}" --force 2>/dev/null || true
+
       - name: Crear los repositorios de ECR
         if: steps.cred.outputs.ok == 'true'
         working-directory: infra/aws
@@ -120,8 +133,6 @@ jobs:
         run: |
           echo "api=$(terraform output -raw url_api)" >> "$GITHUB_OUTPUT"
           echo "web=$(terraform output -raw url_web)" >> "$GITHUB_OUTPUT"
-          echo "bucket=$(terraform output -raw bucket_web)" >> "$GITHUB_OUTPUT"
-          echo "cf=$(terraform output -raw cloudfront_id)" >> "$GITHUB_OUTPUT"
           echo "cluster=$(terraform output -raw cluster)" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@v4
@@ -131,7 +142,7 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Compilar y publicar la SPA
+      - name: Compilar la SPA
         if: steps.cred.outputs.ok == 'true'
         working-directory: frontend
         env:
@@ -142,14 +153,10 @@ jobs:
         run: |
           npm ci
           npm run build
-          # Configuración en tiempo de ejecución (la misma build sirve para CloudFront y cPanel)
+          # Configuración en tiempo de ejecución: la URL del API Gateway cambia si se recrea el lab
           cat > dist/config.json <<JSON
           {"clientId":"${VITE_ENTRA_CLIENT_ID}","authority":"${VITE_ENTRA_AUTHORITY}","apiScope":"${VITE_API_SCOPE}","apiUrl":"${VITE_API_URL}"}
           JSON
-          aws s3 sync dist "s3://${{ steps.salidas.outputs.bucket }}" --delete --cache-control "public,max-age=31536000,immutable" --exclude index.html --exclude config.json
-          aws s3 cp dist/index.html "s3://${{ steps.salidas.outputs.bucket }}/index.html" --cache-control "no-cache"
-          aws s3 cp dist/config.json "s3://${{ steps.salidas.outputs.bucket }}/config.json" --cache-control "no-cache"
-          aws cloudfront create-invalidation --distribution-id "${{ steps.salidas.outputs.cf }}" --paths "/index.html" "/"
 
       - name: Publicar la SPA en la rama web (la descarga el cPanel de turnojusto.xkcx.cl)
         if: steps.cred.outputs.ok == 'true'
@@ -178,8 +185,7 @@ jobs:
         run: |
           {
             echo "## TurnoJusto · QA desplegado"
-            echo "- Aplicación (revisión): https://turnojusto.xkcx.cl"
-            echo "- Aplicación (CloudFront): ${{ steps.salidas.outputs.web }}"
+            echo "- Aplicación: ${{ steps.salidas.outputs.web }}"
             echo "- API Gateway: ${{ steps.salidas.outputs.api }}"
             echo "- Salud ms-organizacion: ${{ steps.salidas.outputs.api }}/organizacion/actuator/health"
             echo "- Salud ms-empleados: ${{ steps.salidas.outputs.api }}/empleados/actuator/health"

@@ -2,7 +2,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// La SPA se publica en Amazon S3 y se sirve por CloudFront (HTTPS).
+// La SPA se publica en https://turnojusto.xkcx.cl desde la rama web del repositorio.
 export default defineConfig({
   plugins: [react()],
   build: { outDir: 'dist', sourcemap: false, chunkSizeWarningLimit: 1200 },

@@ -1,16 +1,17 @@
 locals {
   # Atributos uniformes por microservicio (Terraform exige un mapa homogéneo para for_each).
   servicios = {
-    "ms-organizacion" = { usuario = "ORG_APP", clave = aws_secretsmanager_secret.db_org.arn }
-    "ms-empleados"    = { usuario = "EMP_APP", clave = aws_secretsmanager_secret.db_emp.arn }
+    "ms-organizacion" = { usuario = "ORG_APP", clave = aws_secretsmanager_secret.db_org.arn, puerto = 8081 }
+    "ms-empleados"    = { usuario = "EMP_APP", clave = aws_secretsmanager_secret.db_emp.arn, puerto = 8082 }
   }
-  dominio_interno = aws_service_discovery_private_dns_namespace.interno.name
+  # Cada microservicio tiene su propio listener en el ALB interno (8081 y 8082).
+  url_interna = { for k, v in local.servicios : k => "http://${aws_lb.interno.dns_name}:${v.puerto}" }
   entorno_extra = {
     "ms-organizacion" = tomap({
-      TJ_EMPLEADOS_URL = "http://ms-empleados.${local.dominio_interno}:8080"
+      TJ_EMPLEADOS_URL = local.url_interna["ms-empleados"]
     })
     "ms-empleados" = tomap({
-      TJ_ORGANIZACION_URL = "http://ms-organizacion.${local.dominio_interno}:8080"
+      TJ_ORGANIZACION_URL = local.url_interna["ms-organizacion"]
       TJ_ENTRA_INQUILINO  = var.entra_inquilino
       TJ_ENTRA_CLIENTE_ID = var.entra_audiencia
       TJ_URL_APLICACION   = var.url_web_publica
@@ -87,30 +88,45 @@ resource "aws_secretsmanager_secret_version" "db_url" {
   secret_string = var.db_url
 }
 
-# ---- Descubrimiento de servicios (AWS Cloud Map) ----
-resource "aws_service_discovery_private_dns_namespace" "interno" {
-  name        = "turnojusto.local"
-  description = "Nombres internos de los microservicios"
-  vpc         = data.aws_vpc.principal.id
+# ---- Balanceo y descubrimiento: ALB interno ----
+# El Learner Lab bloquea AWS Cloud Map (servicediscovery:*) por política de la organización,
+# así que el descubrimiento se resuelve con un Application Load Balancer interno: un listener
+# y un grupo de destino por microservicio. API Gateway llega a él por el VPC Link.
+resource "aws_lb" "interno" {
+  name               = "tj-${var.ambiente}-interno"
+  internal           = true
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = data.aws_subnets.publicas.ids
+  idle_timeout       = 60
 }
 
-resource "aws_service_discovery_service" "servicio" {
-  for_each = local.servicios
-  name     = each.key
-  dns_config {
-    namespace_id   = aws_service_discovery_private_dns_namespace.interno.id
-    routing_policy = "MULTIVALUE"
-    dns_records {
-      type = "A"
-      ttl  = 10
-    }
-    dns_records {
-      type = "SRV"
-      ttl  = 10
-    }
+resource "aws_lb_target_group" "servicio" {
+  for_each             = local.servicios
+  name                 = "tj-${var.ambiente}-${replace(each.key, "ms-", "")}"
+  port                 = 8080
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = data.aws_vpc.principal.id
+  deregistration_delay = 15
+  health_check {
+    path                = "/actuator/health/liveness"
+    matcher             = "200"
+    interval            = 30
+    healthy_threshold   = 2
+    unhealthy_threshold = 5
   }
-  health_check_custom_config {}
-  force_destroy = true
+}
+
+resource "aws_lb_listener" "servicio" {
+  for_each          = local.servicios
+  load_balancer_arn = aws_lb.interno.arn
+  port              = each.value.puerto
+  protocol          = "HTTP"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.servicio[each.key].arn
+  }
 }
 
 # ---- Cluster y servicios Fargate ----
@@ -150,7 +166,7 @@ resource "aws_ecs_task_definition" "servicio" {
       { name = "TJ_DB_USUARIO", value = each.value.usuario },
       { name = "TJ_JWT_EMISOR", value = var.entra_emisor },
       { name = "TJ_JWT_AUDIENCIA", value = var.entra_audiencia },
-      { name = "TJ_CORS_ORIGENES", value = "https://${aws_cloudfront_distribution.web.domain_name},${var.url_web_publica}" },
+      { name = "TJ_CORS_ORIGENES", value = "${var.url_web_publica},http://localhost:5173" },
       { name = "JAVA_TOOL_OPTIONS", value = "-Duser.timezone=America/Santiago" },
     ], [for k, v in local.entorno_extra[each.key] : { name = k, value = v }])
     secrets = concat([
@@ -196,10 +212,14 @@ resource "aws_ecs_service" "servicio" {
     assign_public_ip = true # sin NAT Gateway: la IP pública permite salir a Oracle y a Entra
   }
 
-  service_registries {
-    registry_arn = aws_service_discovery_service.servicio[each.key].arn
-    port         = 8080
+  load_balancer {
+    target_group_arn = aws_lb_target_group.servicio[each.key].arn
+    container_name   = each.key
+    container_port   = 8080
   }
+  health_check_grace_period_seconds = 240
+
+  depends_on = [aws_lb_listener.servicio]
 
   wait_for_steady_state = false
 }

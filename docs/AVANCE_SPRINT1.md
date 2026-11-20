@@ -23,11 +23,11 @@
 
 | Componente | Nube | Despliegue | Estado |
 |---|---|---|---|
-| SPA React | AWS S3 + CloudFront | Se publica desde el pipeline en cada push a `main` | Operativa |
+| SPA React | Hosting HTTPS `turnojusto.xkcx.cl` (el Learner Lab bloquea CloudFront) | El pipeline la publica en la rama `web` y el cPanel la descarga cada 5 minutos | Operativa |
 | API Gateway (HTTP API + autorizador JWT) | AWS | Terraform | Operativo |
 | ms-organizacion | AWS ECS Fargate (contenedor propio, 0,5 vCPU y 1 GB) | Imagen en ECR, servicio ECS independiente | Operativo |
 | ms-empleados | AWS ECS Fargate (contenedor propio) | Imagen en ECR, servicio ECS independiente | Operativo |
-| Descubrimiento de servicios | AWS Cloud Map (`turnojusto.local`) | Terraform | Operativo |
+| Descubrimiento y balanceo | ALB interno de AWS, un listener por microservicio (el Learner Lab bloquea Cloud Map) | Terraform | Operativo |
 | Identidad (IDaaS) | Microsoft Entra (Azure) | App TurnoJusto: scope `access_as_user`, 3 app roles y tokens v2 | Operativa |
 | Base de datos | Oracle Autonomous Database (OCI, Santiago) | Esquemas ORG y EMP en v2, más la semilla QA | Operativa |
 | ms-turnos, ms-asignacion, ms-reportes, fn-notificaciones y Service Bus | AWS y Azure | Sprints 2 y 3 | Pendiente |

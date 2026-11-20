@@ -1,6 +1,6 @@
 /**
  * Configuración de la SPA. Se toma de /config.json al cargar la página (así un mismo build
- * sirve para CloudFront y para turnojusto.xkcx.cl) y, si no existe, de las variables de Vite.
+ * sirve para cualquier hosting) y, si no existe, de las variables de Vite.
  */
 export const config = {
   clientId: import.meta.env.VITE_ENTRA_CLIENT_ID as string,

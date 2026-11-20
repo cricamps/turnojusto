@@ -3,6 +3,8 @@ data "aws_vpc" "principal" {
   default = true
 }
 
+# El VPC Link de API Gateway no está disponible en la zona use1-az3, por eso se
+# filtran las subredes por identificador de zona (el nombre us-east-1x varía por cuenta).
 data "aws_subnets" "publicas" {
   filter {
     name   = "vpc-id"
@@ -11,6 +13,10 @@ data "aws_subnets" "publicas" {
   filter {
     name   = "default-for-az"
     values = ["true"]
+  }
+  filter {
+    name   = "availability-zone-id"
+    values = var.zonas_permitidas
   }
 }
 
@@ -34,29 +40,51 @@ resource "aws_security_group" "vpc_link" {
   }
 }
 
+# Balanceador interno: recibe el tráfico del VPC Link y las llamadas entre microservicios.
+resource "aws_security_group" "alb" {
+  name        = "tj-${var.ambiente}-alb"
+  description = "ALB interno de TurnoJusto"
+  vpc_id      = data.aws_vpc.principal.id
+
+  ingress {
+    description     = "Desde API Gateway (VPC Link)"
+    from_port       = 8081
+    to_port         = 8082
+    protocol        = "tcp"
+    security_groups = [aws_security_group.vpc_link.id]
+  }
+
+  ingress {
+    description = "Llamadas entre microservicios"
+    from_port   = 8081
+    to_port     = 8082
+    protocol    = "tcp"
+    cidr_blocks = [data.aws_vpc.principal.cidr_block]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [data.aws_vpc.principal.cidr_block]
+  }
+}
+
 resource "aws_security_group" "servicios" {
   name        = "tj-${var.ambiente}-servicios"
   description = "Microservicios de TurnoJusto en Fargate"
   vpc_id      = data.aws_vpc.principal.id
 
   ingress {
-    description     = "Trafico desde API Gateway (VPC Link)"
+    description     = "Trafico desde el ALB interno"
     from_port       = 8080
     to_port         = 8080
     protocol        = "tcp"
-    security_groups = [aws_security_group.vpc_link.id]
-  }
-
-  ingress {
-    description = "Llamadas entre microservicios (Cloud Map)"
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    self        = true
+    security_groups = [aws_security_group.alb.id]
   }
 
   egress {
-    description = "Salida a Oracle Cloud, Entra External ID y ECR"
+    description = "Salida a Oracle Cloud, Microsoft Entra y ECR"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"

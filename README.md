@@ -20,11 +20,11 @@ Proyecto de la asignatura **Taller Aplicado de Software (TSY2201)**, Duoc UC · 
                                     │ token                         │ invitación
 ┌──────────────────────────── Amazon Web Services ──────────────────┼───────────────────────┐
 │                                                                    │                       │
-│  CloudFront + S3 ──► SPA React (MSAL)   (copia de revisión en turnojusto.xkcx.cl, cPanel) │
+│  SPA React (MSAL) ── https://turnojusto.xkcx.cl (rama web del repo, publicada por el CI)  │
 │        │ HTTPS + Bearer JWT                                        │                       │
 │        ▼                                                           │                       │
 │  API Gateway (HTTP API) ── autorizador JWT de Entra ── VPC Link    │                       │
-│        │                         Cloud Map (turnojusto.local)      │                       │
+│        │                ALB interno (:8081 organización, :8082 empleados)                 │
 │        ├──► ECS Fargate · ms-organizacion ◄──── REST ────► ECS Fargate · ms-empleados      │
 │        │       (empresa, sucursales, equipos)     (fichas, traslados, desactivación)       │
 │  ECR (imágenes) · Secrets Manager (claves) · CloudWatch Logs                               │
@@ -40,7 +40,7 @@ Proyecto de la asignatura **Taller Aplicado de Software (TSY2201)**, Duoc UC · 
 |---|---|
 | Microservicios + base de datos por servicio | `ms-organizacion` es dueño del esquema ORG y `ms-empleados` del esquema EMP. No hay llaves foráneas entre esquemas. |
 | API Gateway | Un solo punto de entrada valida el JWT (emisor, audiencia y vigencia) antes de enrutar. |
-| Descubrimiento de servicios | Los servicios se llaman por `http://<servicio>.turnojusto.local:8080` (AWS Cloud Map). |
+| Descubrimiento de servicios | Un ALB interno tiene un listener por microservicio (8081 y 8082). API Gateway llega a él por el VPC Link y los servicios se llaman entre sí por su DNS interno. Reemplaza a AWS Cloud Map, que el Learner Lab bloquea. |
 | Token relay | Un servicio reenvía el token del usuario al llamar a otro, para que cada uno aplique sus propias reglas. |
 | Outbox | Los eventos (`EmpleadoTrasladado`, `EmpleadoDesactivado`, etc.) se guardan en la misma transacción que el cambio. |
 | Multiempresa | Cada consulta se filtra por `EMPRESA_ID`. El Coordinador solo ve su sucursal y el Empleado solo su propia ficha. |
@@ -55,7 +55,7 @@ turnojusto/
 │   └── ms-empleados/      Java 21 · Spring Boot 4 · fichas, traslados, desactivación y contexto (F1, F3)
 ├── frontend/              React 19 · TypeScript · Vite · MUI · TanStack Query · MSAL (pantallas por rol)
 ├── db/                    Migraciones Flyway por esquema (V1 de la semana 4 + mejoras v2 + semilla QA)
-├── infra/aws/             Terraform: ECR, ECS Fargate, Cloud Map, API Gateway, Secrets Manager, S3 y CloudFront
+├── infra/aws/             Terraform: ECR, ECS Fargate, ALB interno, API Gateway, VPC Link y Secrets Manager
 ├── docs/                  Avance del sprint, cambios del modelo, mockups v1 y v2
 └── .github/workflows/     CI (build, pruebas y cobertura) y despliegue continuo a QA
 ```
@@ -98,7 +98,7 @@ El contrato OpenAPI 3 de cada servicio se publica en `<API>/organizacion/v3/api-
 | Workflow | Cuándo corre | Qué hace |
 |---|---|---|
 | `CI` | En cada push y pull request | Corre `mvn verify` en cada microservicio (pruebas JUnit 5 + Mockito y cobertura JaCoCo), luego Vitest y el build del frontend, y al final `terraform validate`. |
-| `Despliegue QA` | En cada push a `main`, o de forma manual | Aplica Terraform, construye y publica las imágenes en ECR con el SHA del commit, actualiza ECS, publica la SPA en S3 e invalida CloudFront. |
+| `Despliegue QA` | En cada push a `main`, o de forma manual | Aplica Terraform, construye y publica las imágenes en ECR con el SHA del commit, actualiza ECS y publica la SPA en la rama `web`, que el cPanel de turnojusto.xkcx.cl descarga cada 5 minutos. |
 
 ### Configuración del repositorio (Settings → Secrets and variables → Actions)
 
@@ -124,3 +124,13 @@ cd frontend && cp .env.example .env.local && npm install && npm run dev
 ## Equipo y metodología
 
 Usamos Scrum con sprints semanales. Cristobal Camps es líder técnico y Scrum Master, y Cynthia Torres es Product Owner y líder de calidad. Cada sprint se integra en `main`, pasa el CI y queda etiquetado (`v0.1.0-sprint1`, …).
+
+## Ajustes por las restricciones de AWS Academy Learner Lab
+
+La política de la organización (SCP) del Learner Lab deniega tres piezas del diseño de la semana 4. Se reemplazaron sin cambiar la arquitectura de microservicios:
+
+| Diseño original | Error en el Learner Lab | Reemplazo |
+|---|---|---|
+| AWS Cloud Map (`turnojusto.local`) | `servicediscovery:CreatePrivateDnsNamespace` no autorizado | ALB interno con un listener y un grupo de destino por microservicio |
+| S3 + CloudFront para la SPA | `s3:GetBucketObjectLockConfiguration` y `cloudfront:CreateOriginAccessControl` con *explicit deny* | Hosting HTTPS en `turnojusto.xkcx.cl` (cPanel) alimentado por la rama `web` |
+| VPC Link en todas las subredes | La zona `use1-az3` no admite VPC Link | Las subredes se filtran por AZ ID (`zonas_permitidas`) |
