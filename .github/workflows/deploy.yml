@@ -13,13 +13,12 @@ concurrency:
   group: despliegue-qa
   cancel-in-progress: false
 
+permissions:
+  contents: write
+
 env:
   AWS_REGION: us-east-1
   TF_IN_AUTOMATION: "true"
-  # Copia pública de la SPA en cPanel (opcional): requiere el secreto CPANEL_TOKEN
-  CPANEL_HOST: camps.cl:2083
-  CPANEL_USUARIO: campscl1
-  CPANEL_DIR: public_html/turnojusto.xkcx.cl
 
 jobs:
   desplegar:
@@ -143,21 +142,24 @@ jobs:
         run: |
           npm ci
           npm run build
-          aws s3 sync dist "s3://${{ steps.salidas.outputs.bucket }}" --delete --cache-control "public,max-age=31536000,immutable" --exclude index.html
+          # Configuración en tiempo de ejecución (la misma build sirve para CloudFront y cPanel)
+          cat > dist/config.json <<JSON
+          {"clientId":"${VITE_ENTRA_CLIENT_ID}","authority":"${VITE_ENTRA_AUTHORITY}","apiScope":"${VITE_API_SCOPE}","apiUrl":"${VITE_API_URL}"}
+          JSON
+          aws s3 sync dist "s3://${{ steps.salidas.outputs.bucket }}" --delete --cache-control "public,max-age=31536000,immutable" --exclude index.html --exclude config.json
           aws s3 cp dist/index.html "s3://${{ steps.salidas.outputs.bucket }}/index.html" --cache-control "no-cache"
+          aws s3 cp dist/config.json "s3://${{ steps.salidas.outputs.bucket }}/config.json" --cache-control "no-cache"
           aws cloudfront create-invalidation --distribution-id "${{ steps.salidas.outputs.cf }}" --paths "/index.html" "/"
 
-      - name: Publicar la SPA en cPanel (turnojusto.xkcx.cl)
+      - name: Publicar la SPA en la rama web (la descarga el cPanel de turnojusto.xkcx.cl)
         if: steps.cred.outputs.ok == 'true'
-        env:
-          CPANEL_TOKEN: ${{ secrets.CPANEL_TOKEN }}
+        working-directory: frontend/dist
         run: |
-          if [ -z "$CPANEL_TOKEN" ]; then echo "Sin CPANEL_TOKEN: se omite la copia en cPanel"; exit 0; fi
-          cd frontend/dist && zip -qr ../web.zip . && cd ..
-          AUTH="Authorization: cpanel ${CPANEL_USUARIO}:${CPANEL_TOKEN}"
-          curl -fsS -H "$AUTH" -F "dir=${CPANEL_DIR}" -F "overwrite=1" -F "file-1=@web.zip" "https://${CPANEL_HOST}/execute/Fileman/upload_files" > /dev/null
-          curl -fsS -H "$AUTH" "https://${CPANEL_HOST}/json-api/cpanel?cpanel_jsonapi_apiversion=2&cpanel_jsonapi_module=Fileman&cpanel_jsonapi_func=fileop&op=extract&sourcefiles=${CPANEL_DIR}/web.zip&destfiles=${CPANEL_DIR}" > /dev/null
-          echo "SPA publicada en https://turnojusto.xkcx.cl"
+          # Un cron en cPanel descarga esta rama cada 5 minutos y la copia en public_html/turnojusto.xkcx.cl
+          git init -q -b web
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" commit -qm "SPA ${GITHUB_SHA::12}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" web
 
       - name: Esperar a que los microservicios estén estables
         if: steps.cred.outputs.ok == 'true'
