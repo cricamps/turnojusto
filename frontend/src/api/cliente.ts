@@ -15,14 +15,14 @@ export class ErrorApi extends Error {
 }
 
 async function token(): Promise<string> {
-  const cuenta = msal.getActiveAccount() ?? msal.getAllAccounts()[0]
+  const cuenta = msal().getActiveAccount() ?? msal().getAllAccounts()[0]
   if (!cuenta) throw new ErrorApi(401, 'Tu sesión expiró. Vuelve a iniciar sesión.')
   try {
-    const r = await msal.acquireTokenSilent({ ...apiRequest, account: cuenta })
+    const r = await msal().acquireTokenSilent({ ...apiRequest(), account: cuenta })
     return r.accessToken
   } catch (e) {
     if (e instanceof InteractionRequiredAuthError) {
-      await msal.acquireTokenRedirect({ ...apiRequest, account: cuenta })
+      await msal().acquireTokenRedirect({ ...apiRequest(), account: cuenta })
     }
     throw e
   }
@@ -30,14 +30,21 @@ async function token(): Promise<string> {
 
 /** Llama a la API a través de Amazon API Gateway con el token de Entra External ID. */
 export async function api<T>(ruta: string, opciones: { metodo?: string; cuerpo?: unknown } = {}): Promise<T> {
-  const respuesta = await fetch(`${config.apiUrl}${ruta}`, {
+  if (!config.apiUrl) throw new ErrorApi(0, 'La API de TurnoJusto aún no está configurada en este sitio.')
+  let respuesta: Response
+  try {
+    respuesta = await fetch(`${config.apiUrl}${ruta}`, {
     method: opciones.metodo ?? 'GET',
     headers: {
       Authorization: `Bearer ${await token()}`,
       ...(opciones.cuerpo !== undefined ? { 'Content-Type': 'application/json' } : {}),
     },
     body: opciones.cuerpo !== undefined ? JSON.stringify(opciones.cuerpo) : undefined,
-  })
+    })
+  } catch {
+    // La API corre en AWS Academy: si el Learner Lab está detenido, no responde.
+    throw new ErrorApi(0, 'Los servicios de TurnoJusto no están disponibles en este momento (el ambiente de AWS podría estar detenido). Intenta nuevamente más tarde.')
+  }
   if (!respuesta.ok) {
     let detalle = 'Ocurrió un error inesperado. Intenta nuevamente.'
     let campos: Record<string, string> = {}

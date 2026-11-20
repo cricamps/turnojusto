@@ -1,0 +1,6 @@
+{
+  "clientId": "e31d6081-d88f-4583-a6ab-4cca00115d2f",
+  "authority": "https://login.microsoftonline.com/eecac794-e205-4127-a54a-b77a968b3604",
+  "apiScope": "api://e31d6081-d88f-4583-a6ab-4cca00115d2f/access_as_user",
+  "apiUrl": ""
+}

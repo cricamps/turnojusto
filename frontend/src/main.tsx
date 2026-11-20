@@ -9,13 +9,16 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
-import { msal } from './auth/msal'
+import { crearMsal } from './auth/msal'
+import { cargarConfig } from './config'
 import { NotificadorProvider } from './componentes/Notificador'
 import { tema } from './tema'
 
 const consultas = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false, retry: 1 } } })
 
-msal.initialize().then(async () => {
+cargarConfig().then(async () => {
+  const msal = crearMsal()
+  await msal.initialize()
   const resultado = await msal.handleRedirectPromise().catch(() => null)
   const cuenta = resultado?.account ?? msal.getAllAccounts()[0]
   if (cuenta) msal.setActiveAccount(cuenta)

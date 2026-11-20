@@ -29,7 +29,7 @@ export function Login() {
               <Typography color="text.secondary">Usa el correo con el que tu empresa te registró.</Typography>
             </Box>
             <Button variant="contained" size="large" startIcon={<LockIcon />}
-              onClick={() => instance.loginRedirect(loginRequest)}>
+              onClick={() => instance.loginRedirect(loginRequest())}>
               Ingresar con mi cuenta
             </Button>
             <Typography variant="caption" color="text.secondary">
