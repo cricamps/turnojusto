@@ -1,0 +1,67 @@
+# ms-organizacion · configuración. Los valores sensibles llegan como variables de entorno
+# (en AWS desde Secrets Manager, inyectados por la definición de tarea de ECS).
+server:
+  port: ${PORT:8080}
+  servlet:
+    context-path: ${TJ_CONTEXT_PATH:}
+  shutdown: graceful
+
+spring:
+  application:
+    name: ms-organizacion
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${TJ_DB_URL:}
+    username: ${TJ_DB_USUARIO:ORG_APP}
+    password: ${TJ_DB_CLAVE:}
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 20000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        default_schema: ORG
+        jdbc.time_zone: UTC
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${TJ_JWT_EMISOR:}
+          audiences: ${TJ_JWT_AUDIENCIA:}
+
+tj:
+  empleados:
+    url: ${TJ_EMPLEADOS_URL:http://localhost:8081}
+  cors:
+    origenes: ${TJ_CORS_ORIGENES:*}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  info:
+    env:
+      enabled: true
+
+info:
+  servicio: ms-organizacion
+  version: '@project.version@'
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    cl.turnojusto: INFO
