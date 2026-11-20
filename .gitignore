@@ -1,0 +1,27 @@
+# Java / Maven
+target/
+*.class
+*.log
+# Node / Vite
+node_modules/
+dist/
+coverage/
+.env.local
+.env.*.local
+# IDE
+.idea/
+.vscode/
+*.iml
+.DS_Store
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+# Secretos: nunca se versionan (billetera de Oracle, credenciales)
+wallet/
+*.p12
+*.jks
+.env
