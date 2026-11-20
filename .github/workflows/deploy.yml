@@ -1,0 +1,168 @@
+# Despliegue continuo a AWS (ambiente QA): cada push a main reconstruye las imágenes,
+# actualiza la infraestructura con Terraform y publica la SPA. Así el avance queda
+# visible en línea apenas se integra un cambio.
+name: Despliegue QA
+
+on:
+  push:
+    branches: [main]
+    paths: ["services/**", "frontend/**", "infra/aws/**", ".github/workflows/deploy.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: despliegue-qa
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  desplegar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Credenciales del Learner Lab
+        id: cred
+        env:
+          CREDENCIALES: ${{ secrets.AWS_CREDENCIALES }}
+        run: |
+          # AWS_CREDENCIALES es el bloque [default] que muestra "AWS Details > AWS CLI" en el
+          # Learner Lab. Las credenciales duran lo que la sesión del lab (4 h).
+          if [ -z "$CREDENCIALES" ]; then
+            echo "::warning::Falta el secreto AWS_CREDENCIALES (copiar desde AWS Details del Learner Lab). Se omite el despliegue."
+            echo "ok=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          printf '%s\n' "$CREDENCIALES" | tr -d '\r' > /tmp/cred.ini
+          for k in aws_access_key_id aws_secret_access_key aws_session_token; do
+            v=$(sed -n "s/^[[:space:]]*$k[[:space:]]*=[[:space:]]*//p" /tmp/cred.ini | head -1)
+            echo "::add-mask::$v"
+            echo "$(echo $k | tr a-z A-Z)=$v" >> "$GITHUB_ENV"
+          done
+          rm /tmp/cred.ini
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Comprobar la sesión de AWS
+        if: steps.cred.outputs.ok == 'true'
+        run: aws sts get-caller-identity --query Arn --output text
+
+      - uses: hashicorp/setup-terraform@v3
+        if: steps.cred.outputs.ok == 'true'
+        with:
+          terraform_wrapper: false
+
+      - name: Preparar estado remoto de Terraform (S3)
+        if: steps.cred.outputs.ok == 'true'
+        id: estado
+        run: |
+          CUENTA=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET="turnojusto-tfstate-${CUENTA}"
+          aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null || aws s3api create-bucket --bucket "$BUCKET" --region "$AWS_REGION"
+          aws s3api put-bucket-versioning --bucket "$BUCKET" --versioning-configuration Status=Enabled
+          echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
+
+      - name: Terraform init
+        if: steps.cred.outputs.ok == 'true'
+        working-directory: infra/aws
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ steps.estado.outputs.bucket }}" \
+            -backend-config="key=qa/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}"
+
+      - name: Variables de Terraform
+        if: steps.cred.outputs.ok == 'true'
+        run: |
+          {
+            echo "TF_VAR_entra_inquilino=${{ vars.ENTRA_TENANT_ID }}"
+            echo "TF_VAR_entra_emisor=https://login.microsoftonline.com/${{ vars.ENTRA_TENANT_ID }}/v2.0"
+            echo "TF_VAR_entra_secreto=${{ secrets.ENTRA_SECRETO }}"
+            echo "TF_VAR_entra_audiencia=${{ vars.ENTRA_CLIENT_ID }}"
+            echo "TF_VAR_db_url=${{ vars.TJ_DB_URL }}"
+            echo "TF_VAR_db_clave_org=${{ secrets.TJ_DB_CLAVE_ORG }}"
+            echo "TF_VAR_db_clave_emp=${{ secrets.TJ_DB_CLAVE_EMP }}"
+            echo "TF_VAR_imagen_tag=${GITHUB_SHA::12}"
+          } >> "$GITHUB_ENV"
+
+      - name: Crear los repositorios de ECR
+        if: steps.cred.outputs.ok == 'true'
+        working-directory: infra/aws
+        run: terraform apply -input=false -auto-approve -target=aws_ecr_repository.servicio -target=aws_ecr_lifecycle_policy.limpieza
+
+      - name: Login en Amazon ECR
+        if: steps.cred.outputs.ok == 'true'
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Construir y publicar imágenes
+        if: steps.cred.outputs.ok == 'true'
+        run: |
+          CUENTA=$(aws sts get-caller-identity --query Account --output text)
+          REGISTRO="${CUENTA}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          for s in ms-organizacion ms-empleados; do
+            docker build -t "$REGISTRO/turnojusto/$s:${GITHUB_SHA::12}" -t "$REGISTRO/turnojusto/$s:latest" "services/$s"
+            docker push --all-tags "$REGISTRO/turnojusto/$s"
+          done
+
+      - name: Desplegar infraestructura y microservicios
+        if: steps.cred.outputs.ok == 'true'
+        working-directory: infra/aws
+        run: terraform apply -input=false -auto-approve
+
+      - name: Leer salidas de Terraform
+        if: steps.cred.outputs.ok == 'true'
+        id: salidas
+        working-directory: infra/aws
+        run: |
+          echo "api=$(terraform output -raw url_api)" >> "$GITHUB_OUTPUT"
+          echo "web=$(terraform output -raw url_web)" >> "$GITHUB_OUTPUT"
+          echo "bucket=$(terraform output -raw bucket_web)" >> "$GITHUB_OUTPUT"
+          echo "cf=$(terraform output -raw cloudfront_id)" >> "$GITHUB_OUTPUT"
+          echo "cluster=$(terraform output -raw cluster)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        if: steps.cred.outputs.ok == 'true'
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Compilar y publicar la SPA
+        if: steps.cred.outputs.ok == 'true'
+        working-directory: frontend
+        env:
+          VITE_API_URL: ${{ steps.salidas.outputs.api }}
+          VITE_ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
+          VITE_ENTRA_AUTHORITY: https://login.microsoftonline.com/${{ vars.ENTRA_TENANT_ID }}
+          VITE_API_SCOPE: ${{ vars.ENTRA_SCOPE }}
+        run: |
+          npm ci
+          npm run build
+          aws s3 sync dist "s3://${{ steps.salidas.outputs.bucket }}" --delete --cache-control "public,max-age=31536000,immutable" --exclude index.html
+          aws s3 cp dist/index.html "s3://${{ steps.salidas.outputs.bucket }}/index.html" --cache-control "no-cache"
+          aws cloudfront create-invalidation --distribution-id "${{ steps.salidas.outputs.cf }}" --paths "/index.html" "/"
+
+      - name: Esperar a que los microservicios estén estables
+        if: steps.cred.outputs.ok == 'true'
+        run: |
+          aws ecs wait services-stable --cluster "${{ steps.salidas.outputs.cluster }}" --services ms-organizacion ms-empleados || true
+          for s in organizacion empleados; do
+            for i in $(seq 1 20); do
+              c=$(curl -s -o /dev/null -w "%{http_code}" "${{ steps.salidas.outputs.api }}/$s/actuator/health") && [ "$c" = "200" ] && break
+              sleep 15
+            done
+            echo "ms-$s: HTTP $c"
+          done
+
+      - name: Resumen del despliegue
+        if: steps.cred.outputs.ok == 'true'
+        run: |
+          {
+            echo "## TurnoJusto · QA desplegado"
+            echo "- Aplicación: ${{ steps.salidas.outputs.web }}"
+            echo "- API Gateway: ${{ steps.salidas.outputs.api }}"
+            echo "- Salud ms-organizacion: ${{ steps.salidas.outputs.api }}/organizacion/actuator/health"
+            echo "- Salud ms-empleados: ${{ steps.salidas.outputs.api }}/empleados/actuator/health"
+            echo "- Imagen: \`${GITHUB_SHA::12}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

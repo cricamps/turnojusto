@@ -1,0 +1,8 @@
+# Copiar a qa.tfvars (no se versiona). En el pipeline estos valores llegan como secretos de GitHub.
+entra_inquilino = "<tenant-id>"
+entra_emisor    = "https://login.microsoftonline.com/<tenant-id>/v2.0"
+entra_secreto   = "..."
+entra_audiencia = "<client-id>"
+db_url          = "jdbc:oracle:thin:@(description=...)"
+db_clave_org    = "..."
+db_clave_emp    = "..."
