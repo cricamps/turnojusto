@@ -4,7 +4,7 @@ resource "aws_apigatewayv2_api" "principal" {
   protocol_type = "HTTP"
   description   = "Puerta de entrada de TurnoJusto: valida el JWT de Entra y enruta a cada microservicio"
   cors_configuration {
-    allow_origins = ["https://${aws_cloudfront_distribution.web.domain_name}", "http://localhost:5173"]
+    allow_origins = ["https://${aws_cloudfront_distribution.web.domain_name}", var.url_web_publica, "http://localhost:5173"]
     allow_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     allow_headers = ["authorization", "content-type"]
     max_age       = 3600

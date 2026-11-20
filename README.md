@@ -4,6 +4,8 @@ Plataforma cloud native para la **gestión de empleados y turnos rotativos equit
 
 Proyecto de la asignatura **Taller Aplicado de Software (TSY2201)**, Duoc UC · Grupo 2: Cynthia Torres y Cristobal Camps · Docente: Alonso Esteban Castillo Pizarro.
 
+> **Sistema en línea:** https://turnojusto.xkcx.cl · **API:** Amazon API Gateway (ver la salida del workflow *Despliegue QA*)
+>
 > **Estado: Sprint 1 (semana 5) · versión `v0.1.0-sprint1`.** Hay dos microservicios desplegados y el frontend está publicado. El detalle de lo implementado está en [docs/AVANCE_SPRINT1.md](docs/AVANCE_SPRINT1.md).
 
 ---
@@ -18,7 +20,7 @@ Proyecto de la asignatura **Taller Aplicado de Software (TSY2201)**, Duoc UC · 
                                     │ token                         │ invitación
 ┌──────────────────────────── Amazon Web Services ──────────────────┼───────────────────────┐
 │                                                                    │                       │
-│  CloudFront + S3 ──► SPA React (MSAL)                              │                       │
+│  CloudFront + S3 ──► SPA React (MSAL)   (copia de revisión en turnojusto.xkcx.cl, cPanel) │
 │        │ HTTPS + Bearer JWT                                        │                       │
 │        ▼                                                           │                       │
 │  API Gateway (HTTP API) ── autorizador JWT de Entra ── VPC Link    │                       │

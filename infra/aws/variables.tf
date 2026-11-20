@@ -66,3 +66,9 @@ variable "db_clave_emp" {
   type        = string
   sensitive   = true
 }
+
+variable "url_web_publica" {
+  description = "Dominio público de la SPA para revisión (hosting en cPanel), además de CloudFront"
+  type        = string
+  default     = "https://turnojusto.xkcx.cl"
+}

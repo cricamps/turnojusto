@@ -23,3 +23,8 @@ output "ecr" {
 output "cluster" {
   value = aws_ecs_cluster.principal.name
 }
+
+output "url_web_publica" {
+  description = "URL pública de revisión (cPanel)"
+  value       = var.url_web_publica
+}

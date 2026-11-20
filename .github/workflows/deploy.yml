@@ -16,6 +16,10 @@ concurrency:
 env:
   AWS_REGION: us-east-1
   TF_IN_AUTOMATION: "true"
+  # Copia pública de la SPA en cPanel (opcional): requiere el secreto CPANEL_TOKEN
+  CPANEL_HOST: camps.cl:2083
+  CPANEL_USUARIO: campscl1
+  CPANEL_DIR: public_html/turnojusto.xkcx.cl
 
 jobs:
   desplegar:
@@ -143,6 +147,18 @@ jobs:
           aws s3 cp dist/index.html "s3://${{ steps.salidas.outputs.bucket }}/index.html" --cache-control "no-cache"
           aws cloudfront create-invalidation --distribution-id "${{ steps.salidas.outputs.cf }}" --paths "/index.html" "/"
 
+      - name: Publicar la SPA en cPanel (turnojusto.xkcx.cl)
+        if: steps.cred.outputs.ok == 'true'
+        env:
+          CPANEL_TOKEN: ${{ secrets.CPANEL_TOKEN }}
+        run: |
+          if [ -z "$CPANEL_TOKEN" ]; then echo "Sin CPANEL_TOKEN: se omite la copia en cPanel"; exit 0; fi
+          cd frontend/dist && zip -qr ../web.zip . && cd ..
+          AUTH="Authorization: cpanel ${CPANEL_USUARIO}:${CPANEL_TOKEN}"
+          curl -fsS -H "$AUTH" -F "dir=${CPANEL_DIR}" -F "overwrite=1" -F "file-1=@web.zip" "https://${CPANEL_HOST}/execute/Fileman/upload_files" > /dev/null
+          curl -fsS -H "$AUTH" "https://${CPANEL_HOST}/json-api/cpanel?cpanel_jsonapi_apiversion=2&cpanel_jsonapi_module=Fileman&cpanel_jsonapi_func=fileop&op=extract&sourcefiles=${CPANEL_DIR}/web.zip&destfiles=${CPANEL_DIR}" > /dev/null
+          echo "SPA publicada en https://turnojusto.xkcx.cl"
+
       - name: Esperar a que los microservicios estén estables
         if: steps.cred.outputs.ok == 'true'
         run: |
@@ -160,7 +176,8 @@ jobs:
         run: |
           {
             echo "## TurnoJusto · QA desplegado"
-            echo "- Aplicación: ${{ steps.salidas.outputs.web }}"
+            echo "- Aplicación (revisión): https://turnojusto.xkcx.cl"
+            echo "- Aplicación (CloudFront): ${{ steps.salidas.outputs.web }}"
             echo "- API Gateway: ${{ steps.salidas.outputs.api }}"
             echo "- Salud ms-organizacion: ${{ steps.salidas.outputs.api }}/organizacion/actuator/health"
             echo "- Salud ms-empleados: ${{ steps.salidas.outputs.api }}/empleados/actuator/health"

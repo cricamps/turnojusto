@@ -13,7 +13,7 @@ locals {
       TJ_ORGANIZACION_URL = "http://ms-organizacion.${local.dominio_interno}:8080"
       TJ_ENTRA_INQUILINO  = var.entra_inquilino
       TJ_ENTRA_CLIENTE_ID = var.entra_audiencia
-      TJ_URL_APLICACION   = "https://${aws_cloudfront_distribution.web.domain_name}"
+      TJ_URL_APLICACION   = var.url_web_publica
     })
   }
   secretos_extra = {
@@ -150,7 +150,7 @@ resource "aws_ecs_task_definition" "servicio" {
       { name = "TJ_DB_USUARIO", value = each.value.usuario },
       { name = "TJ_JWT_EMISOR", value = var.entra_emisor },
       { name = "TJ_JWT_AUDIENCIA", value = var.entra_audiencia },
-      { name = "TJ_CORS_ORIGENES", value = "https://${aws_cloudfront_distribution.web.domain_name}" },
+      { name = "TJ_CORS_ORIGENES", value = "https://${aws_cloudfront_distribution.web.domain_name},${var.url_web_publica}" },
       { name = "JAVA_TOOL_OPTIONS", value = "-Duser.timezone=America/Santiago" },
     ], [for k, v in local.entorno_extra[each.key] : { name = k, value = v }])
     secrets = concat([
