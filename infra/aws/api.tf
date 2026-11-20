@@ -40,16 +40,22 @@ resource "aws_apigatewayv2_integration" "servicio" {
 
 locals {
   # Ruta → microservicio. Las rutas de negocio exigen token; la salud y los contratos OpenAPI son públicos.
-  rutas = {
-    "ANY /api/v1/empresa"            = "ms-organizacion"
-    "ANY /api/v1/regiones"           = "ms-organizacion"
-    "ANY /api/v1/sucursales"         = "ms-organizacion"
-    "ANY /api/v1/sucursales/{proxy+}" = "ms-organizacion"
-    "ANY /api/v1/equipos"            = "ms-organizacion"
-    "ANY /api/v1/equipos/{proxy+}"   = "ms-organizacion"
-    "ANY /api/v1/empleados"          = "ms-empleados"
-    "ANY /api/v1/empleados/{proxy+}" = "ms-empleados"
+  # Se declaran métodos explícitos (no ANY) para que las solicitudes OPTIONS de CORS no pasen por el
+  # autorizador JWT: API Gateway responde el preflight con la configuración CORS de la API.
+  recursos = {
+    "/api/v1/empresa"             = "ms-organizacion"
+    "/api/v1/regiones"            = "ms-organizacion"
+    "/api/v1/sucursales"          = "ms-organizacion"
+    "/api/v1/sucursales/{proxy+}" = "ms-organizacion"
+    "/api/v1/equipos"             = "ms-organizacion"
+    "/api/v1/equipos/{proxy+}"    = "ms-organizacion"
+    "/api/v1/empleados"           = "ms-empleados"
+    "/api/v1/empleados/{proxy+}"  = "ms-empleados"
   }
+  metodos = ["GET", "POST", "PUT", "PATCH", "DELETE"]
+  rutas = merge([
+    for ruta, servicio in local.recursos : { for m in local.metodos : "${m} ${ruta}" => servicio }
+  ]...)
   publicas = {
     "GET /organizacion/actuator/health" = { servicio = "ms-organizacion", ruta = "/actuator/health" }
     "GET /empleados/actuator/health"    = { servicio = "ms-empleados", ruta = "/actuator/health" }

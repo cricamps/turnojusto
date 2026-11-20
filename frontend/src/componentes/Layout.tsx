@@ -99,7 +99,7 @@ function Menulateral({ perfil, alNavegar }: { perfil: Perfil; alNavegar: () => v
       </Box>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 2.5, py: 2, fontSize: 12, color: '#7d9aa0' }}>
         <ShieldIcon fontSize="small" />
-        <span>Sesión protegida con Entra External ID</span>
+        <span>Sesión protegida con Microsoft Entra ID</span>
       </Stack>
     </Box>
   )

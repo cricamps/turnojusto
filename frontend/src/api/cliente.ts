@@ -28,7 +28,7 @@ async function token(): Promise<string> {
   }
 }
 
-/** Llama a la API a través de Amazon API Gateway con el token de Entra External ID. */
+/** Llama a la API a través de Amazon API Gateway con el token de Microsoft Entra ID. */
 export async function api<T>(ruta: string, opciones: { metodo?: string; cuerpo?: unknown } = {}): Promise<T> {
   if (!config.apiUrl) throw new ErrorApi(0, 'La API de TurnoJusto aún no está configurada en este sitio.')
   let respuesta: Response

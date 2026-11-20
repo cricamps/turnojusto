@@ -3,7 +3,7 @@ import { Box, Button, Paper, Stack, Typography } from '@mui/material'
 import { useMsal } from '@azure/msal-react'
 import { loginRequest } from '../auth/msal'
 
-/** P01 · Inicio de sesión. La autenticación (correo, contraseña y MFA) ocurre en Entra External ID. */
+/** P01 · Inicio de sesión. La autenticación (correo, contraseña y MFA) ocurre en Microsoft Entra ID. */
 export function Login() {
   const { instance } = useMsal()
   return (
@@ -33,7 +33,7 @@ export function Login() {
               Ingresar con mi cuenta
             </Button>
             <Typography variant="caption" color="text.secondary">
-              El acceso se valida con Microsoft Entra External ID. TurnoJusto no guarda tu contraseña. Si no tienes cuenta,
+              El acceso se valida con Microsoft Entra ID. TurnoJusto no guarda tu contraseña. Si no tienes cuenta,
               pide al administrador de tu empresa que te registre; luego crea tu cuenta con ese mismo correo.
             </Typography>
           </Stack>

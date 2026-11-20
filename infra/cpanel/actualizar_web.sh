@@ -3,6 +3,8 @@
 # Cron cada 5 minutos: descarga la rama "web" (la publica el workflow Despliegue QA)
 # y, si cambió, la copia en el directorio del subdominio.
 set -euo pipefail
+mkdir -p "$HOME/logs" "$HOME/tmp"
+exec 2>>"$HOME/logs/turnojusto_web.err"   # errores del cron (la salida estándar va a /dev/null)
 DESTINO="$HOME/public_html/turnojusto.xkcx.cl"
 TMP="$HOME/tmp/turnojusto-web"
 mkdir -p "$HOME/tmp"
