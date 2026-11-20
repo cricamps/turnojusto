@@ -31,7 +31,10 @@ interface Item {
   sprint?: string
 }
 
-/** Menú por rol. Lo que llega en los sprints 2 y 3 se muestra deshabilitado con su sprint. */
+/** Sprint en que se entrega cada opción que todavía no está disponible. */
+const cuando = (sprint: string) => (sprint === 'S2' ? 'Sprint 2 (semana 6)' : 'Sprint 3 (semana 7)')
+
+/** Menú por rol. Lo que llega en los sprints 2 y 3 se muestra deshabilitado, como «Próximamente», con un aviso del sprint. */
 const secciones: { titulo: string; items: Item[] }[] = [
   {
     titulo: 'Principal',
@@ -76,23 +79,30 @@ function Menulateral({ perfil, alNavegar }: { perfil: Perfil; alNavegar: () => v
           return (
             <List key={s.titulo} dense
               subheader={<ListSubheader sx={{ bgcolor: 'transparent', color: '#7d9aa0', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6, lineHeight: '32px' }}>{s.titulo}</ListSubheader>}>
-              {items.map((i) => (
-                <ListItemButton key={i.ruta} component={i.sprint ? 'div' : NavLink} to={i.sprint ? undefined : i.ruta}
-                  end={i.ruta === '/'} disabled={!!i.sprint} onClick={alNavegar}
-                  sx={{
-                    mx: 1, borderRadius: 1.5, color: '#cbd5e1', '& .MuiListItemIcon-root': { color: '#9fb6ba', minWidth: 34 },
-                    '&.active': { bgcolor: '#155e63', color: '#fff', '& .MuiListItemIcon-root': { color: '#fff' } },
-                    '&.Mui-disabled': { opacity: 0.55 },
-                  }}>
-                  <ListItemIcon>{i.icono}</ListItemIcon>
-                  <ListItemText primary={i.texto} slotProps={{ primary: { fontSize: 14 } }} />
-                  {i.sprint && (
-                    <Tooltip title={`Disponible en el ${i.sprint === 'S2' ? 'Sprint 2 (semana 6)' : 'Sprint 3 (semana 7)'}`}>
-                      <Chip label={i.sprint} size="small" sx={{ height: 18, fontSize: 10, bgcolor: '#1f4a4f', color: '#9fb6ba' }} />
-                    </Tooltip>
-                  )}
-                </ListItemButton>
-              ))}
+              {items.map((i) => {
+                const boton = (
+                  <ListItemButton key={i.ruta} component={i.sprint ? 'div' : NavLink} to={i.sprint ? undefined : i.ruta}
+                    end={i.ruta === '/'} disabled={!!i.sprint} onClick={alNavegar}
+                    aria-label={i.sprint ? `${i.texto}: próximamente, ${cuando(i.sprint)}` : undefined}
+                    sx={{
+                      mx: 1, borderRadius: 1.5, color: '#cbd5e1', '& .MuiListItemIcon-root': { color: '#9fb6ba', minWidth: 34 },
+                      '&.active': { bgcolor: '#155e63', color: '#fff', '& .MuiListItemIcon-root': { color: '#fff' } },
+                      '&.Mui-disabled': { opacity: 0.6 },
+                    }}>
+                    <ListItemIcon>{i.icono}</ListItemIcon>
+                    <ListItemText primary={i.texto}
+                      secondary={i.sprint ? 'Próximamente' : undefined}
+                      slotProps={{ primary: { fontSize: 14 }, secondary: { fontSize: 11, color: '#7fc4bd' } }} />
+                  </ListItemButton>
+                )
+                if (!i.sprint) return boton
+                // Un elemento deshabilitado no recibe eventos del mouse: el span permite mostrar el aviso.
+                return (
+                  <Tooltip key={i.ruta} title={`Disponible en el ${cuando(i.sprint)}`} placement="right" arrow>
+                    <Box component="span" sx={{ display: 'block', cursor: 'not-allowed' }} tabIndex={0}>{boton}</Box>
+                  </Tooltip>
+                )
+              })}
             </List>
           )
         })}
